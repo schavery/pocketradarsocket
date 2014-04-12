@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Pocket Radar</title>
+		<style type="text/css">
+			/* This is the style definition for the document. */
+			html {
+				height:100%;
+			}
+			body {
+				margin:10% auto 0;
+				width:80%;
+				font-family: sans-serif;
+				font-size: 200%;
+				overflow-y:hidden;
+			}
+			tr td:first-child {
+				text-align:right;
+			}
+			td span {
+				font-size: 150%;
+			}
+			#bignum {
+				float:left;
+				width:60%;
+			}
+			#bignum span {
+				display: inline-block;
+				letter-spacing: 20px;
+				text-align: center;
+				width:100%;
+			}
+			#sidebar {
+				float:right;
+				width:30%;
+				margin-bottom: 1em;
+			}
+			#logo img {
+				width:100%;
+			}
+			#logo {
+				margin-bottom: 1em;
+			}
+			#last {
+				font-size: 60%;
+				padding-left: 50px;
+			}
+			#ticker {
+				clear: both;
+				overflow:hidden;
+				width: 100%;
+				height:70px;
+			}
+			#ticker span {
+				font-size: 60px;
+				padding: 0 18px;
+				float: left;
+			}
+
+			/* media queries allow styles to change responding
+			   to the device requesting the document.
+			   Should this page ever be loaded on a page that is
+			   narrower than 800px, then the font-size can change
+			   along with any other style. */
+			@media (max-width: 800px) {
+				#bignum span {
+					font-size:300px;
+				}
+			}
+			@media (min-width: 801px) {
+				#bignum span {
+					font-size:300px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div id="bignum">
+			<span>---</span>
+		</div>
+		<div id="sidebar">
+			<div id="logo">
+				<div>BALL SPEED by</div>
+				<img src="pr.png">
+			</div>
+			<div id="stats">
+				<div id="last" style="visibility:hidden;">
+					LAST <span></span>
+				</div>
+				<div id="tab">
+					<table>
+						<tr>
+							<td>AVG:</td>
+							<td>
+								<span id="ave"></span>
+							</td>
+						</tr>
+						<tr>
+							<td>MAX:</td>
+							<td>
+								<span id="max"></span>
+							</td>
+						</tr>
+						<tr>
+							<td>COUNT:</td>
+							<td>
+								<span id="cnt"></span>
+							</td>
+						</tr>
+					</table>
+				</div>
+			</div>
+		</div>
+		<div id="ticker"></div>
+		<script type="text/javascript">
+			(function() {
+				'use strict';
+				// Create a web socket connection to the server.
+				// The WebSocket object is an API provided by browser vendors. It
+				// is not available in older browsers, so be sure to run this page
+				// in Firefox or Chrome. The required parameter is the URI of the
+				// websocket server. Alternatively, the wss:// protocol is available
+				// for secure connections.
+
+				// change the url to echo to use the debug functions
+				var echourl = 'ws://localhost:5555/echo',
+					pushurl = 'ws://localhost:5555/prd';
+				window.ws = new WebSocket(pushurl);
+
+				// Now we need to set up the event handlers that the WebSocket API
+				// provides us. They are:
+				// onclose
+				// onerror
+				// onmessage <- important one
+				// onopen
+				// for example:
+				ws.onerror = function() {
+					// here we might try to renegotiate a connection
+					console.log('WebSocket not connected.');
+				};
+
+				ws.onmessage = function(event) {
+					// here we need to take the event object passed
+					// to us and run the appropriate function based
+					// on what it contains
+					// console.log(typeof event);
+					var rd = JSON.parse(event.data);
+					
+					if('reset' in rd) {
+						prd.reset();
+					};
+
+					if('spd' in rd) {
+						prd.update(rd.spd);
+					};
+				};
+
+
+				// Create a javascript 'Object' to hold our data
+				function PRdata() {
+					// code here is run on initialization of the object.
+
+					// make the number of entries in 
+					// the last pitch ticker
+					// responsive to screen width
+					var c = setTimeout(function() {
+						var w = document.getElementsByTagName('body')[0].offsetWidth;
+						prd.limit = Math.floor(w / 110);
+					},25);
+				};
+
+				// here we define the PRdata class member variables
+				PRdata.prototype.last_ctr = 0;
+				PRdata.prototype.last_spds = [];
+				PRdata.prototype.total = 0;
+
+				// and member functions
+				// Reset clears the numbers from the document,
+				// so it is ready to start fresh for a new player.
+				PRdata.prototype.reset = function() {
+					this.last_ctr = 0;
+					this.last_spds = [];
+					this.total = 0;
+
+					var t = document.getElementById('ticker'),
+						bs = document.querySelector('#bignum span'),
+						ts = document.querySelectorAll('td span'),
+						l = document.getElementById('last');
+
+					l.style.visibility = 'hidden';
+					l.children[0].innerHTML = '';
+
+					while (t.firstChild) {
+						t.removeChild(t.firstChild);
+					};
+
+					bs.innerHTML = '---';
+
+					for (var i = ts.length - 1; i >= 0; i--) {
+						ts[i].innerHTML = '';
+					};
+				};
+
+				// Update counts pitches and calls other functions to
+				// change the document
+				PRdata.prototype.update = function(spd) {
+					// This is where the real work is done
+
+					this.last_spds.push(spd);
+
+					if(this.last_spds.length < (this.limit + 2)) {
+						// the variable is updated in memory, but isn't displayed until
+						// we insert it into the page structure, which we do outside of
+						// this if else block
+						this.last_ctr++;
+					} else if(this.last_spds.length == (this.limit + 2)) {
+						// now we have to drop a value from the list,
+						// since we want to keep limit +1
+						this.last_spds.shift();
+					}
+
+					// } else {
+					// 	// this is a bad place to be in. Somehow we have exceeded the 
+					// 	// number of elements we want to have in the array.
+					// 	while(this.last_spds.length > (this.limit + 1)) {
+					// 		this.last_spds.shift();
+					// 	}
+					// 	this.last_ctr = this.limit - 1;
+					// }
+
+					// this inserts the last pitch into the BIG number
+					document.querySelector('#bignum span').innerHTML = spd;
+
+					// this is for the 'Last x pitches'
+					document.querySelector('#last span').innerHTML = this.last_ctr;
+					if(this.last_ctr == 2) {
+						// Show count after 2 pitches
+						document.getElementById('last').style.visibility = 'visible';
+					}
+
+					// update the count of total pitches since reset.
+					document.getElementById('cnt').innerHTML = ++prd.total;
+
+					// this function updates the ticker at the bottom of the screen
+					re_list();
+
+					// this function recalculates the average and max statistics
+					re_average();
+					
+				};
+
+				// Now that the class is defined, let's create an instance of it
+				// that will exist through the lifetime of the page.
+				// This prd variable will be accessible
+				// at the window level, so we can debug outside this anonymous
+				// execution environment.
+				window.prd = new PRdata();
+
+
+				// Here are the functions for updating the DOM, which is
+				// the browser's representation of the web page and its
+				// contents.
+
+				var re_list = function() {
+					if(prd.last_ctr > 1) {
+						// this function updates the list of numbers
+						// along the bottom of the page.
+						var t = document.getElementById('ticker'),
+							s = document.createElement('span');
+						s.innerHTML = prd.last_spds[prd.last_spds.length - 2];
+						if(t.childNodes.length == prd.limit) {
+							t.removeChild(t.lastChild);
+						};
+						t.insertBefore(s,t.firstChild);						
+					}
+				};
+
+				var re_average = function() {
+					// recalculate the statistics in the sidebar and 
+					// insert them
+					var sum, max = 0;
+					sum = prd.last_spds.reduce(function(a,b){return a+b;});
+					for (var i = prd.last_spds.length - 1; i >= 0; i--) {
+						max = Math.max(max,prd.last_spds[i]);
+					};
+
+					document.getElementById('ave').innerHTML = Math.round(sum / prd.last_spds.length, 1);
+					document.getElementById('max').innerHTML = max;
+				};
+
+
+
+				// **************************************************
+				// the following code is for debugging.
+
+				// These functions ping the websocket server
+				// to echo exactly what we send
+				// the server must know this, so we have
+				// to use a specific url
+				// as noted near the top of this script
+				PRdata.prototype.test_update = function() {
+					var spd = {
+						'spd': 70 + Math.floor(Math.random()*35)
+					};
+					ws.send(JSON.stringify(spd));
+				};
+
+				PRdata.prototype.test_reset = function() {
+					var r = {
+						'reset':true
+					};
+					ws.send(JSON.stringify(r));
+				};
+
+			}())
+		</script>
+	</body>
+</html>
